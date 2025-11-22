@@ -1,157 +1,62 @@
 const express = require("express");
+const bcrypt = require("bcrypt");
 const { dbConnect } = require("./config/database.js");
-const { admincheck } = require("./middlewares/admincheck.js");
+const cookieParser = require("cookie-parser");
 const app = express();
+const cors = require("cors");
+
+const feedRoutes = require("./routes/feed.js");
 const User = require("./models/user.js");
 app.use(express.json());
+const { userAuth } = require("./middlewares/auth.js");
+const jwt = require("jsonwebtoken");
+app.use(cookieParser());
 
-app.patch("/user/:id", async (req, res) => {
-  try {
-    const allowedUpdates = [
-      "name",
-      "password",
-      "role",
-      "gender",
-      "skills",
-      "fotoURL",
-      "hobbies",
-    ];
-    if (
-      Object.keys(req.body).every((field) => allowedUpdates.includes(field))
-    ) {
-      if (req.body.hobbies.length > 6) {
-        throw new Error(
-          "Hobbies cannot have more than 6 entries and you entered " +
-            req.body.hobbies.length
-        );
-      }
-      const user = req.body._id;
+app.use(
+  cors({
+    origin: "http://localhost:5173", // your Vite frontend
+    credentials: true, // allow cookies if used
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"], // ✅ avoid "Cannot parse Access-Control-Allow-Headers"
+  })
+);
 
-      const userBefore = await User.findById(req.params.id);
-      const updatedUser = await User.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        {
-          returnDocument: "after",
-          runValidators: true,
-        }
-      );
-      console.log(updatedUser);
-      if (!updatedUser) {
-        return res.status(404).send("user not found");
-      } else {
-        res
-          .status(200)
-          .send(
-            "user updated successfully from this " +
-              userBefore +
-              " to this " +
-              updatedUser
-          );
-      }
-    } else {
-      throw new Error(
-        "Invalid updates! only " + allowedUpdates + " are allowed"
-      );
-    }
-  } catch (err) {
-    console.log(err);
-    res.status(500).send("Internal Server Errorr" + err);
-  }
+const authRoutes = require("./routes/auth.js");
+const userRoutes = require("./routes/user.js");
+const connectionRoutes = require("./routes/connectionRequests.js");
+const userConnection = require("./routes/userConnection.js");
+
+let toDo = [
+  {
+    name: "Build a social networking app",
+    tasks: [
+      "User Authentication",
+      "User Profiles",
+      "Connection Requests",
+      "Feed Generation",
+    ],
+    completed: true,
+  },
+  {
+    name: "Set up database",
+    tasks: ["Design Schemas", "Implement Models", "Database Connection"],
+    completed: false,
+  },
+];
+
+const validator = require("validator");
+app.get("/test", async (req, res, next) => {
+  res.status(200).json({ message: "API is working", toDo });
 });
-
-app.delete("/user", async (req, res) => {
-  try {
-    const user = req.body._id;
-    const deletedUser = await User.findByIdAndDelete(user);
-    if (!deletedUser) {
-      return res.status(404).send("user not found");
-    } else {
-      res.status(200).send("user deleted successfully" + deletedUser);
-    }
-  } catch (err) {
-    console.log(err);
-    res.status(500).send("Internal Server Error");
-  }
+app.post("/test", (req, res) => {
+  toDo = [...toDo, req.body];
+  res.status(200).json({ message: "Added successfully", toDo });
 });
-
-app.get("/userById/:id", async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
-    res.status(200).send(user);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send("Internal Server Error");
-  }
-});
-app.get("/userById", async (req, res) => {
-  try {
-    const user = await User.findById(req.body._id);
-
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
-    res.status(200).send(user);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send("Internal Server Error");
-  }
-});
-
-app.get("/user", async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.body.email });
-    res.status(200).send(user);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send("Internal Server Error");
-  }
-});
-
-app.post("/user", async (req, res) => {
-  try {
-    const user = new User(req.body);
-    await user.save();
-    // console.log(user);
-    res.status(201).send("user succesfully created : " + user);
-    console.log("user created succesfully");
-  } catch (err) {
-    console.log("Error creating user:", err);
-    res.status(500).send("Internal Server Error" + err);
-  }
-});
-
-app.get("/users", async (req, res) => {
-  try {
-    const user = await User.find({ email: req.body.email });
-    if (user.length === 0) {
-      return res.status(404).send("User not found");
-    }
-    console.log(user);
-    res.status(200).send(user);
-  } catch (err) {
-    console.log("Error fetching user:", err);
-    res.status(500).send("Internal Server Error : " + err.message);
-  }
-});
-
-app.use("/admin", admincheck);
-
-app.get("/admin", (req, res) => {
-  res.send("Hello from /admin endpoint");
-});
-
-app.post("/admin", (req, res) => {
-  res.send("POST /admin received");
-});
-
-app.get("/admin/settings", (req, res) => {
-  res.send("Hello from /admin/settings endpoint");
-});
-console.log(dbConnect);
+app.use("/auth", authRoutes);
+app.use("/userInfo", userRoutes);
+app.use("/connectionRequest", userAuth, connectionRoutes);
+app.use("/userConnections", userAuth, userConnection);
+app.use("/feed", userAuth, feedRoutes);
 
 dbConnect()
   .then(() => {

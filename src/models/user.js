@@ -1,10 +1,23 @@
 const mongoose = require("mongoose");
 const validator = require("validator");
+const jwt = require("jsonwebtoken");
 
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    hobbies: { type: [String], default: [] },
+    age: { type: Number, default: 20 },
+    hobbies: {
+      type: [String],
+      default: [],
+      validate(v) {
+        if (v.length > 6) {
+          throw new Error(
+            "hobbies cannot have more than 5 entries and you entered " +
+              v.length
+          );
+        }
+      },
+    },
     email: {
       type: String,
       required: true,
@@ -14,6 +27,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
+      required: true,
       validate(v) {
         if (v.length < 6) {
           throw new Error("Password must be at least 6 characters long");
@@ -23,7 +37,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, default: "user" },
     fotoURL: {
       type: String,
-      default: "",
+      default: "https://defaultfoto.com/image.png",
       max: [2048, "fotoURL length exceeded"],
       validate(v) {
         if (validator.isURL(v) === false) {
@@ -33,6 +47,7 @@ const userSchema = new mongoose.Schema(
     },
     gender: {
       type: String,
+      required: true,
       validate(value) {
         if (["male", "female", "other"].indexOf(value) === -1) {
           throw new Error("Gender must be 'male', 'female', or 'other'");
@@ -53,5 +68,17 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.methods.getJWT = async function () {
+  const user = this;
+  const token = jwt.sign(
+    { _id: user._id, email: user.email, role: user.role },
+    "secreateKey",
+    {
+      expiresIn: "7d",
+    }
+  );
+  return token;
+};
 
 module.exports = mongoose.model("DevTinderUser", userSchema);
